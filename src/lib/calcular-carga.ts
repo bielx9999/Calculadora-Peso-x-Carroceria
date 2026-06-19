@@ -92,29 +92,30 @@ function placeUnit(unit: FloorUnit, bin: PackingBin, candidate: PlacementCandida
   bin.rowLength = Math.max(bin.rowLength, candidate.length)
 }
 
-function packUnits(units: FloorUnit[], vehicle: Vehicle, minimumBins: number): PackingBin[] | null {
+function packUnitsInFixedBins(units: FloorUnit[], vehicle: Vehicle, count: number): PackingBin[] | null {
   if (units.some((unit) => !findCandidate(unit, createBin(), vehicle))) return null
-  const bins = Array.from({ length: minimumBins }, () => createBin())
+  const bins = Array.from({ length: count }, () => createBin())
 
   for (const unit of units) {
-    const binOrder = bins.map((bin, index) => ({ bin, index })).sort((a, b) => a.bin.occupiedArea - b.bin.occupiedArea)
-    let placed = false
-    for (const { bin } of binOrder) {
+    const options = bins.flatMap((bin, index) => {
       const candidate = findCandidate(unit, bin, vehicle)
-      if (!candidate) continue
-      placeUnit(unit, bin, candidate)
-      placed = true
-      break
-    }
-    if (!placed) {
-      const bin = createBin()
-      const candidate = findCandidate(unit, bin, vehicle)
-      if (!candidate) return null
-      placeUnit(unit, bin, candidate)
-      bins.push(bin)
-    }
+      return candidate ? [{ bin, index, candidate }] : []
+    }).sort((a, b) => Number(a.candidate.newRow) - Number(b.candidate.newRow)
+      || b.bin.occupiedArea - a.bin.occupiedArea
+      || a.index - b.index)
+    if (!options.length) return null
+    placeUnit(unit, options[0].bin, options[0].candidate)
   }
   return bins
+}
+
+function packUnits(units: FloorUnit[], vehicle: Vehicle, minimumBins: number): PackingBin[] | null {
+  const maximumBins = Math.max(minimumBins, units.length)
+  for (let count = minimumBins; count <= maximumBins; count += 1) {
+    const bins = packUnitsInFixedBins(units, vehicle, count)
+    if (bins) return bins
+  }
+  return null
 }
 
 function buildVehiclePlan(units: FloorUnit[], vehicle: Vehicle, totalWeight: number, totalArea: number) {
@@ -152,17 +153,16 @@ interface FleetBin extends PackingBin {
   vehicle: Vehicle
 }
 
-function vehicleCombinations(vehicles: Vehicle[], count: number, start = 0, current: Vehicle[] = [], output: Vehicle[][] = []) {
+function* vehicleCombinations(vehicles: Vehicle[], count: number, start = 0, current: Vehicle[] = []): Generator<Vehicle[]> {
   if (current.length === count) {
-    output.push([...current])
-    return output
+    yield [...current]
+    return
   }
   for (let index = start; index < vehicles.length; index += 1) {
     current.push(vehicles[index])
-    vehicleCombinations(vehicles, count, index, current, output)
+    yield* vehicleCombinations(vehicles, count, index, current)
     current.pop()
   }
-  return output
 }
 
 function packMixedFleet(units: FloorUnit[], fleet: Vehicle[]): FleetBin[] | null {
@@ -185,20 +185,21 @@ function packMixedFleet(units: FloorUnit[], fleet: Vehicle[]): FleetBin[] | null
 }
 
 function findMixedPlan(units: FloorUnit[], activeVehicles: Vehicle[], totalWeight: number, totalArea: number, maximumCount: number) {
-  const uniqueTypes = Array.from(new Map(activeVehicles.map((vehicle) => [vehicle.tipo, vehicle])).values())
-  const largestCapacity = Math.max(...uniqueTypes.map((vehicle) => vehicle.capacidade_kg))
-  const largestArea = Math.max(...uniqueTypes.map((vehicle) => vehicle.area_m2))
+  const vehicleOptions = activeVehicles
+    .sort((a, b) => b.capacidade_kg - a.capacidade_kg || b.area_m2 - a.area_m2)
+  const largestCapacity = Math.max(...vehicleOptions.map((vehicle) => vehicle.capacidade_kg))
+  const largestArea = Math.max(...vehicleOptions.map((vehicle) => vehicle.area_m2))
   const minimumCount = Math.max(Math.ceil(totalWeight / largestCapacity), Math.ceil(totalArea / largestArea), 1)
-  const searchLimit = Math.min(maximumCount, 12)
 
-  for (let count = minimumCount; count <= searchLimit; count += 1) {
+  for (let count = minimumCount; count <= maximumCount; count += 1) {
     let best: { bins: FleetBin[]; score: number } | null = null
-    for (const combination of vehicleCombinations(uniqueTypes, count)) {
+    for (const combination of vehicleCombinations(vehicleOptions, count)) {
       const totalCapacity = combination.reduce((sum, vehicle) => sum + vehicle.capacidade_kg, 0)
       const totalFloorArea = combination.reduce((sum, vehicle) => sum + vehicle.area_m2, 0)
       if (totalCapacity < totalWeight || totalFloorArea < totalArea) continue
       const bins = packMixedFleet(units, combination)
       if (!bins) continue
+      if (count > 12) return bins
       const score = totalCapacity / largestCapacity + totalFloorArea / largestArea
       if (!best || score < best.score) best = { bins, score }
     }
@@ -221,11 +222,15 @@ export function calcularCarga(items: LoadItem[], vehicles: Vehicle[], totalWeigh
   const available = plans
     .filter(({ alternative }) => alternative.veiculo.ativo && alternative.compativel)
     .sort((a, b) => a.alternative.quantidade - b.alternative.quantidade || a.alternative.veiculo.area_m2 - b.alternative.veiculo.area_m2)
-  if (!available.length) throw new Error("Nenhuma carroceria ativa comporta as dimensões dos itens.")
 
   const suggested = available[0]
   const activeVehicles = validVehicles.filter((vehicle) => vehicle.ativo)
-  const mixedBins = findMixedPlan(units, activeVehicles, totalWeight, totalArea, suggested.alternative.quantidade)
+  if (!activeVehicles.length) throw new Error("Nenhuma carroceria ativa disponível para o cálculo.")
+  const largestCapacity = Math.max(...activeVehicles.map((vehicle) => vehicle.capacidade_kg))
+  const mixedUpperBound = suggested?.alternative.quantidade
+    ?? units.length + Math.ceil(totalWeight / largestCapacity)
+  const mixedBins = findMixedPlan(units, activeVehicles, totalWeight, totalArea, mixedUpperBound)
+  if (!mixedBins && !suggested) throw new Error("Nenhuma combinação de carrocerias ativas comporta as dimensões dos itens.")
   const selectedBins: FleetBin[] = mixedBins || suggested.bins.map((bin) => ({ ...bin, vehicle: suggested.alternative.veiculo }))
   const fleetCapacity = selectedBins.reduce((sum, bin) => sum + bin.vehicle.capacidade_kg, 0)
   const fleetArea = selectedBins.reduce((sum, bin) => sum + bin.vehicle.area_m2, 0)
@@ -244,6 +249,7 @@ export function calcularCarga(items: LoadItem[], vehicles: Vehicle[], totalWeigh
   }})
 
   return {
+    visualizacao_versao: 1,
     tipo: selectedBins.length === 1 ? "unico" : "multiplo",
     veiculo: selectedBins[0].vehicle,
     quantidade: selectedBins.length,

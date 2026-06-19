@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Group, Layer, Line, Rect, Stage, Text } from "react-konva"
+import { Circle, Group, Layer, Line, Rect, Stage, Text } from "react-konva"
 import type { Vehicle, VehicleAllocation } from "@/types"
 
-const palette = ["#2563eb", "#f26522", "#16a34a", "#9333ea", "#ca8a04", "#0891b2", "#e11d48"]
+const palette = ["#2563eb", "#FFCC29", "#16a34a", "#9333ea", "#ca8a04", "#0891b2", "#e11d48"]
 
 function colorFor(id: string) {
   const hash = Array.from(id).reduce((total, character) => total + character.charCodeAt(0), 0)
@@ -64,15 +64,18 @@ export function LoadDistributionCanvas({ allocation, vehicle }: LoadDistribution
           const width = position.comprimento_m * geometry.scale
           const height = position.largura_m * geometry.scale
           const showLabel = width > 50 && height > 28
+          const stackBadgeX = x + Math.max(width - 10, 10)
+          const stackBadgeY = y + 10
           return <Group key={position.id}>
             <Rect x={x + 1} y={y + 1} width={Math.max(width - 2, 1)} height={Math.max(height - 2, 1)} fill={colorFor(position.produto_id)} opacity={0.82} stroke="#ffffff" strokeWidth={1} cornerRadius={2} />
-            {showLabel && <Text x={x + 3} y={y + 3} width={Math.max(width - 6, 1)} height={Math.max(height - 6, 1)} text={`${position.nome}${position.quantidade > 1 ? `\n×${position.quantidade}` : ""}`} fontSize={Math.min(10, Math.max(7, height / 4))} fill="#ffffff" ellipsis align="center" verticalAlign="middle" />}
+            {showLabel && <Text x={x + 3} y={y + 3} width={Math.max(width - 6, 1)} height={Math.max(height - 6, 1)} text={position.nome} fontSize={Math.min(10, Math.max(7, height / 4))} fill="#ffffff" ellipsis align="center" verticalAlign="middle" />}
+            {position.quantidade > 1 && <><Circle x={stackBadgeX} y={stackBadgeY} radius={9} fill="#0f172a" stroke="#ffffff" strokeWidth={1.5} /><Text x={stackBadgeX - 9} y={stackBadgeY - 6} width={18} text={`${position.quantidade}`} fontSize={10} fontStyle="bold" fill="#ffffff" align="center" /></>}
           </Group>
         })}
         <Text x={geometry.floorX} y={geometry.floorY + geometry.floorHeight + 10} width={geometry.floorWidth} text={`${vehicle.comprimento_m.toLocaleString("pt-BR")} m`} fontSize={12} fill="#64748b" align="center" />
         <Text x={8} y={geometry.floorY + geometry.floorHeight / 2 - 7} width={geometry.floorX - 16} text={`${vehicle.largura_m.toLocaleString("pt-BR")} m`} fontSize={12} fill="#64748b" align="right" />
       </Layer>
     </Stage>
-    <div className="flex flex-wrap gap-x-3 gap-y-1.5 border-t bg-background/80 px-3 py-2">{legend.map(([id, name]) => <span key={id} className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: colorFor(id) }} />{name}</span>)}</div>
+    <div className="flex flex-wrap gap-x-3 gap-y-1.5 border-t bg-background/80 px-3 py-2">{legend.map(([id, name]) => <span key={id} className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: colorFor(id) }} />{name}</span>)}{allocation.posicoes.some((position) => position.quantidade > 1) && <span className="text-[11px] font-medium text-muted-foreground">Número no item = unidades empilhadas</span>}</div>
   </div>
 }

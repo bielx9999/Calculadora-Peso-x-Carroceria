@@ -69,6 +69,7 @@ export interface VehicleAlternative {
 }
 
 export interface LoadResult {
+  visualizacao_versao?: number
   tipo: "unico" | "multiplo"
   veiculo: Vehicle
   quantidade: number

@@ -71,4 +71,38 @@ describe("calcularCarga", () => {
     expect(names.filter((name) => name === carreta.nome).length).toBeGreaterThan(0)
     expect(names.filter((name) => name === vanderleia.nome).length).toBeLessThan(5)
   })
+
+  it("prioriza a menor quantidade antes da capacidade excedente", () => {
+    const pequeno = { ...demoVehicles[3], id: "pequeno", tipo: "truck" as const, capacidade_kg: 10000, area_m2: 19.6 }
+    const grande = { ...demoVehicles[5], id: "grande", tipo: "vanderleia" as const, capacidade_kg: 30000, area_m2: 36.7 }
+    const result = calcularCarga([criarItemCarga(demoProducts[1], 1)], [pequeno, grande], 59000)
+    expect(result.quantidade).toBe(2)
+    expect(result.distribuicao.every((allocation) => allocation.veiculo.id === grande.id)).toBe(true)
+  })
+
+  it("nao limita a otimizacao a doze veiculos", () => {
+    const grande = { ...demoVehicles[5], capacidade_kg: 1000 }
+    const result = calcularCarga([criarItemCarga(demoProducts[1], 1)], [grande], 13000)
+    expect(result.quantidade).toBe(13)
+  })
+
+  it("combina formatos complementares quando nenhum tipo atende sozinho", () => {
+    const longo = { ...demoVehicles[3], id: "longo", tipo: "truck" as const, capacidade_kg: 1000, comprimento_m: 3, largura_m: 1, area_m2: 3 }
+    const largo = { ...demoVehicles[4], id: "largo", tipo: "carreta" as const, capacidade_kg: 1000, comprimento_m: 2, largura_m: 2, area_m2: 4 }
+    const produtoLongo = { ...demoProducts[0], id: "produto-longo", comprimento_cm: 300, largura_cm: 100, area_unitaria_m2: 3 }
+    const produtoLargo = { ...demoProducts[1], id: "produto-largo", comprimento_cm: 200, largura_cm: 200, area_unitaria_m2: 4, empilhavel: false }
+    const result = calcularCarga([criarItemCarga(produtoLongo, 1), criarItemCarga(produtoLargo, 1)], [longo, largo], 1000)
+    expect(result.quantidade).toBe(2)
+    expect(new Set(result.distribuicao.map((allocation) => allocation.veiculo.id))).toEqual(new Set([longo.id, largo.id]))
+  })
+
+  it("calcula e posiciona produtos pelo limite de empilhamento", () => {
+    const produto = { ...demoProducts[0], empilhavel: true, limite_empilhamento: 3 }
+    const item = criarItemCarga(produto, 7)
+    const result = calcularCarga([item], demoVehicles, 500)
+    const positions = result.distribuicao.flatMap((allocation) => allocation.posicoes)
+    expect(item.area_total_m2).toBeCloseTo(produto.area_unitaria_m2 * 3, 3)
+    expect(positions).toHaveLength(3)
+    expect(positions.map((position) => position.quantidade)).toEqual([3, 3, 1])
+  })
 })

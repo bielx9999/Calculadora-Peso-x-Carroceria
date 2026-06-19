@@ -99,7 +99,7 @@ export function VehiclesManager({ initialVehicles }: { initialVehicles: Vehicle[
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por tipo de carroceria" className="pl-9" />
           </div>
-          <Button onClick={() => showForm()} className="bg-[#f26522] text-white hover:bg-[#d95619]"><Plus className="h-4 w-4" />Novo veículo</Button>
+          <Button onClick={() => showForm()} className="bg-[#FFCC29] text-slate-900 hover:bg-[#E6B800]"><Plus className="h-4 w-4" />Novo veículo</Button>
         </div>
         <div className="overflow-x-auto">
           <Table>

@@ -1,6 +1,6 @@
 # CargoCalc
 
-Sistema web para planejamento de cargas de transportadoras. Compara peso e volume, recomenda a menor carroceria compatível e distribui cargas que exigem múltiplos veículos.
+Sistema web para planejamento de cargas de transportadoras. Compara peso e area util, recomenda a menor carroceria compativel e distribui cargas que exigem multiplos veiculos.
 
 ## Executar
 
