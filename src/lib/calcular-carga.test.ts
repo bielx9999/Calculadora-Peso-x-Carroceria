@@ -45,6 +45,14 @@ describe("calcularCarga", () => {
     expect(positions[2]).toMatchObject({ x_m: 0.62, y_m: 0 })
   })
 
+  it("permite distribuir na horizontal um atras do outro", () => {
+    const result = calcularCarga([criarItemCarga(demoProducts[2], 3)], [demoVehicles[3]], 100, "horizontal")
+    const positions = result.distribuicao[0].posicoes
+    expect(positions[0]).toMatchObject({ x_m: 0, y_m: 0 })
+    expect(positions[1]).toMatchObject({ x_m: 0.62, y_m: 0 })
+    expect(positions[2]).toMatchObject({ x_m: 1.24, y_m: 0 })
+  })
+
   it("mantem dois paletes de 1,40 x 1,00 lado a lado em 2,40 m", () => {
     const pallet = { ...demoProducts[0], comprimento_cm: 140, largura_cm: 100, area_unitaria_m2: 1.4 }
     const truck = { ...demoVehicles[3], largura_m: 2.4, area_m2: demoVehicles[3].comprimento_m * 2.4 }
@@ -65,24 +73,41 @@ describe("calcularCarga", () => {
   it("combina carrocerias menores no restante da carga", () => {
     const vanderleia = { ...demoVehicles[5], id: "vanderleia-teste", ativo: true, capacidade_kg: 34000 }
     const carreta = { ...demoVehicles[4], id: "carreta-teste", ativo: true, capacidade_kg: 25000 }
-    const result = calcularCarga([criarItemCarga(demoProducts[1], 1)], [vanderleia, carreta], 150000)
+    const result = calcularCarga([criarItemCarga(demoProducts[1], 150)], [vanderleia, carreta], 150000)
     const names = result.distribuicao.map((allocation) => allocation.veiculo.nome)
     expect(result.quantidade).toBe(5)
     expect(names.filter((name) => name === carreta.nome).length).toBeGreaterThan(0)
     expect(names.filter((name) => name === vanderleia.nome).length).toBeLessThan(5)
   })
 
+  it("prefere duas carretas em vez de misturar truck e vanderleia quando atende a carga", () => {
+    const vehicles = [
+      { ...demoVehicles[3], id: "truck-teste", nome: "Truck", tipo: "truck" as const, capacidade_kg: 14000, comprimento_m: 8, largura_m: 2.4, area_m2: 19.2 },
+      { ...demoVehicles[4], id: "carreta-teste", nome: "Carreta", tipo: "carreta" as const, capacidade_kg: 26000, comprimento_m: 12.4, largura_m: 2.4, area_m2: 29.76 },
+      { ...demoVehicles[5], id: "vanderleia-teste", nome: "Vanderleia", tipo: "vanderleia" as const, capacidade_kg: 34000, comprimento_m: 14, largura_m: 2.4, area_m2: 33.6 },
+    ]
+    const rodas = { ...demoProducts[0], id: "rodas-teste", nome: "rodas", tipo: "outro" as const, comprimento_cm: 100, largura_cm: 93, area_unitaria_m2: 0.93, empilhavel: false, limite_empilhamento: 1 }
+    const result = calcularCarga([criarItemCarga(rodas, 26)], vehicles, 47000)
+
+    expect(result.quantidade).toBe(2)
+    expect(result.distribuicao.every((allocation) => allocation.veiculo.id === "carreta-teste")).toBe(true)
+    expect(result.distribuicao.every((allocation) => allocation.peso_kg <= allocation.veiculo.capacidade_kg)).toBe(true)
+    expect(result.distribuicao.reduce((total, allocation) => total + allocation.peso_kg, 0)).toBeCloseTo(47000, 1)
+  })
+
   it("prioriza a menor quantidade antes da capacidade excedente", () => {
     const pequeno = { ...demoVehicles[3], id: "pequeno", tipo: "truck" as const, capacidade_kg: 10000, area_m2: 19.6 }
     const grande = { ...demoVehicles[5], id: "grande", tipo: "vanderleia" as const, capacidade_kg: 30000, area_m2: 36.7 }
-    const result = calcularCarga([criarItemCarga(demoProducts[1], 1)], [pequeno, grande], 59000)
+    const produto = { ...demoProducts[1], empilhavel: false, limite_empilhamento: 1 }
+    const result = calcularCarga([criarItemCarga(produto, 2)], [pequeno, grande], 59000)
     expect(result.quantidade).toBe(2)
     expect(result.distribuicao.every((allocation) => allocation.veiculo.id === grande.id)).toBe(true)
   })
 
   it("nao limita a otimizacao a doze veiculos", () => {
     const grande = { ...demoVehicles[5], capacidade_kg: 1000 }
-    const result = calcularCarga([criarItemCarga(demoProducts[1], 1)], [grande], 13000)
+    const produto = { ...demoProducts[1], empilhavel: false, limite_empilhamento: 1 }
+    const result = calcularCarga([criarItemCarga(produto, 13)], [grande], 13000)
     expect(result.quantidade).toBe(13)
   })
 

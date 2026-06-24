@@ -14,11 +14,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { LoadItemEntry } from "@/components/load-item-entry"
 import { Progress } from "@/components/ui/progress"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 
 const number = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 })
 const steps = ["Dados da carga", "Resultado", "Salvar simulação"]
+type DistributionDirection = "lado_a_lado" | "horizontal"
+
 const LoadDistributionCanvas = dynamic(
   () => import("@/components/load-distribution-canvas").then((module) => module.LoadDistributionCanvas),
   { ssr: false, loading: () => <div className="h-48 animate-pulse rounded-xl bg-muted" /> },
@@ -31,6 +34,7 @@ export function LoadCalculator({ products }: { products: Product[] }) {
   const [addingItem, setAddingItem] = useState(true)
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [result, setResult] = useState<LoadResult | null>(null)
+  const [distributionDirection, setDistributionDirection] = useState<DistributionDirection>("lado_a_lado")
   const [loading, setLoading] = useState(false)
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
@@ -61,7 +65,8 @@ export function LoadCalculator({ products }: { products: Product[] }) {
     if (editingItemId === productId) setEditingItemId(null)
   }
 
-  async function calculate() {
+  async function calculate(direction?: DistributionDirection) {
+    const selectedDirection = direction || distributionDirection
     if (!items.length) return toast.error("Adicione ao menos um produto.")
     if (!Number.isFinite(loadWeight) || loadWeight <= 0) return toast.error("Informe o peso total da carga.")
     setLoading(true)
@@ -71,6 +76,7 @@ export function LoadCalculator({ products }: { products: Product[] }) {
       body: JSON.stringify({
         itens: items.map((item) => ({ produto_id: item.produto.id, quantidade: item.quantidade })),
         peso_total_kg: loadWeight,
+        direcao_distribuicao: selectedDirection,
       }),
     })
     const body = await response.json()
@@ -78,6 +84,11 @@ export function LoadCalculator({ products }: { products: Product[] }) {
     if (!response.ok) return toast.error(body.error || "Falha ao calcular.")
     setResult(body as LoadResult)
     setStep(2)
+  }
+
+  function changeDistributionDirection(direction: DistributionDirection) {
+    setDistributionDirection(direction)
+    void calculate(direction)
   }
 
   async function save() {
@@ -120,16 +131,30 @@ export function LoadCalculator({ products }: { products: Product[] }) {
         </div>
         <div className="overflow-x-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>Produto</TableHead><TableHead>Qtd.</TableHead><TableHead>Área ocupada</TableHead><TableHead /></TableRow></TableHeader><TableBody>{items.length ? items.map((item) => <TableRow key={item.produto.id}><TableCell><p className="font-medium">{item.produto.nome}</p><p className="text-xs text-muted-foreground">{item.produto.comprimento_cm} × {item.produto.largura_cm} cm{item.produto.empilhavel ? ` · até ${item.produto.limite_empilhamento} por pilha` : " · não empilhável"}</p></TableCell><TableCell>{item.quantidade}</TableCell><TableCell>{number.format(item.area_total_m2)} m²</TableCell><TableCell><div className="flex justify-end gap-1"><Button type="button" variant="ghost" size="icon" aria-label={`Editar ${item.produto.nome}`} onClick={() => editItem(item.produto.id)}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" aria-label={`Remover ${item.produto.nome} da carga`} onClick={() => removeItem(item.produto.id)}><Trash2 className="h-4 w-4" /></Button></div></TableCell></TableRow>) : <TableRow><TableCell colSpan={4} className="h-36 text-center text-muted-foreground">Nenhum item adicionado.</TableCell></TableRow>}</TableBody></Table></div>
       </CardContent></Card>
-      <Card className="h-fit xl:sticky xl:top-24"><CardHeader><CardTitle>Resumo da carga</CardTitle><CardDescription>Atualizado em tempo real</CardDescription></CardHeader><CardContent className="space-y-5"><Metric label="Peso informado" value={`${number.format(loadWeight)} kg`} /><Metric label="Área de piso calculada" value={`${number.format(totalArea)} m²`} /><div className="border-t pt-5"><p className="mb-3 text-xs text-muted-foreground">{items.length} produto(s) diferente(s)</p><Button className="w-full bg-[#FFCC29] text-slate-900 hover:bg-[#E6B800]" onClick={calculate} disabled={loading || !items.length || loadWeight <= 0}>{loading ? "Calculando..." : "Calcular carga"}<ArrowRight className="h-4 w-4" /></Button></div></CardContent></Card>
+      <Card className="h-fit xl:sticky xl:top-24"><CardHeader><CardTitle>Resumo da carga</CardTitle><CardDescription>Atualizado em tempo real</CardDescription></CardHeader><CardContent className="space-y-5"><Metric label="Peso informado" value={`${number.format(loadWeight)} kg`} /><Metric label="Área de piso calculada" value={`${number.format(totalArea)} m²`} /><div className="border-t pt-5"><p className="mb-3 text-xs text-muted-foreground">{items.length} produto(s) diferente(s)</p><Button className="w-full bg-[#FFCC29] text-slate-900 hover:bg-[#E6B800]" onClick={() => calculate()} disabled={loading || !items.length || loadWeight <= 0}>{loading ? "Calculando..." : "Calcular carga"}<ArrowRight className="h-4 w-4" /></Button></div></CardContent></Card>
     </div>}
 
-    {step === 2 && result && <Result result={result} onBack={() => setStep(1)} onNext={() => setStep(3)} />}
+    {step === 2 && result && <Result result={result} distributionDirection={distributionDirection} loading={loading} onDirectionChange={changeDistributionDirection} onBack={() => setStep(1)} onNext={() => setStep(3)} />}
 
     {step === 3 && result && <div className="grid gap-5 lg:grid-cols-[1fr_380px]"><Card><CardHeader><CardTitle>Identifique a simulação</CardTitle><CardDescription>Salve este planejamento para consulta e aprovação.</CardDescription></CardHeader><CardContent className="space-y-5"><div className="space-y-2"><Label>Nome da simulação</Label><Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Carga Cliente XYZ - Junho" /></div><div className="space-y-2"><Label>Observações</Label><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Instruções de embarque, janela de entrega..." rows={5} /></div><div className="flex justify-between"><Button variant="outline" onClick={() => setStep(2)}><ArrowLeft className="h-4 w-4" />Voltar</Button><Button onClick={save}><Save className="h-4 w-4" />Salvar simulação</Button></div></CardContent></Card><Card className="h-fit bg-muted/40"><CardHeader><CardTitle className="text-base">Resumo final</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><SummaryLine label="Composição" value={describeFleet(result)} /><SummaryLine label="Quantidade" value={`${result.quantidade}`} /><SummaryLine label="Peso total" value={`${number.format(result.peso_total_kg)} kg`} /><SummaryLine label="Área total" value={`${number.format(result.area_total_m2)} m²`} /><SummaryLine label="Fator limitante" value={result.fator_limitante} /></CardContent></Card></div>}
   </div>
 }
 
-function Result({ result, onBack, onNext }: { result: LoadResult, onBack: () => void, onNext: () => void }) {
+function Result({
+  result,
+  distributionDirection,
+  loading,
+  onDirectionChange,
+  onBack,
+  onNext,
+}: {
+  result: LoadResult
+  distributionDirection: DistributionDirection
+  loading: boolean
+  onDirectionChange: (direction: DistributionDirection) => void
+  onBack: () => void
+  onNext: () => void
+}) {
   const unique = result.tipo === "unico"
   return <div className="space-y-5">
     <Card className={cn("border-l-4", unique ? "border-l-emerald-500" : "border-l-amber-500")}>
@@ -140,7 +165,19 @@ function Result({ result, onBack, onNext }: { result: LoadResult, onBack: () => 
     {result.tipo === "multiplo" && <Card><CardHeader><CardTitle className="text-base">Distribuição sugerida</CardTitle><CardDescription>Combinação otimizada para reduzir capacidade excedente no último veículo.</CardDescription></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{result.distribuicao.map((allocation) => <div key={allocation.indice} className="rounded-xl border p-4"><div className="mb-3 flex items-center gap-2"><Truck className="h-4 w-4 text-[#987600] dark:text-[#FFCC29]" /><p className="font-medium">Veículo {allocation.indice} · {allocation.veiculo.nome}</p></div><p className="text-sm text-muted-foreground">{number.format(allocation.peso_kg)} kg · {number.format(allocation.area_m2)} m²</p></div>)}</CardContent></Card>}
 
     <Card>
-      <CardHeader><CardTitle className="text-base">Visualização da distribuição</CardTitle><CardDescription>Vista superior em escala, incluindo 2 cm de folga entre os produtos.</CardDescription></CardHeader>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div><CardTitle className="text-base">Visualização da distribuição</CardTitle><CardDescription>Vista superior em escala, incluindo 2 cm de folga entre os produtos.</CardDescription></div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Direcionamento da carga</Label>
+          <Select value={distributionDirection} onValueChange={(value: DistributionDirection) => onDirectionChange(value)} disabled={loading}>
+            <SelectTrigger className="w-[230px] bg-background"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lado_a_lado">Lado a lado</SelectItem>
+              <SelectItem value="horizontal">Horizontal, um atrás do outro</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2">{result.distribuicao.map((allocation) => <section key={allocation.indice} className="space-y-2"><div className="flex items-center justify-between"><p className="text-sm font-medium">Veículo {allocation.indice} · {allocation.veiculo.nome}</p><p className="text-xs text-muted-foreground">{number.format(allocation.ocupacao_area)}% ocupado</p></div><LoadDistributionCanvas allocation={allocation} vehicle={allocation.veiculo} /></section>)}</CardContent>
     </Card>
 

@@ -12,7 +12,7 @@ export async function POST(request: Request) {
       if (!product) throw new Error("Produto nao encontrado")
       return criarItemCarga(product, item.quantidade)
     })
-    return Response.json(calcularCarga(items, vehicles, parsed.data.peso_total_kg))
+    return Response.json(calcularCarga(items, vehicles, parsed.data.peso_total_kg, parsed.data.direcao_distribuicao))
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Falha no calculo." }, { status: 400 })
   }

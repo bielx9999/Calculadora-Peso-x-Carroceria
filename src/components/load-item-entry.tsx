@@ -28,9 +28,13 @@ export function LoadItemEntry({ products, onAdd, initialItem }: LoadItemEntryPro
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [saving, setSaving] = useState(false)
   const area = (length / 100) * (width / 100)
-  const suggestions = useMemo(() => history
-    .filter((product) => product.ativo && product.nome.toLowerCase().includes(name.trim().toLowerCase()))
-    .slice(0, 6), [history, name])
+  const suggestions = useMemo(() => {
+    const term = name.trim().toLowerCase()
+    if (!term) return []
+    return history
+      .filter((product) => product.ativo && product.nome.toLowerCase().includes(term))
+      .slice(0, 6)
+  }, [history, name])
 
   function selectProduct(product: Product) {
     setName(product.nome)
@@ -90,7 +94,7 @@ export function LoadItemEntry({ products, onAdd, initialItem }: LoadItemEntryPro
     <div className="grid gap-3 lg:grid-cols-[1.4fr_150px_150px_110px_auto] lg:items-end">
       <div className="relative space-y-2">
         <Label htmlFor="product-name">Nome do produto</Label>
-        <Input id="product-name" value={name} onFocus={() => setShowSuggestions(true)} onChange={(event) => { setName(event.target.value); setSelectedId(null); setShowSuggestions(true) }} placeholder="Digite ou escolha um item usado anteriormente" autoComplete="off" />
+        <Input id="product-name" value={name} onFocus={() => setShowSuggestions(Boolean(name.trim()))} onBlur={() => setShowSuggestions(false)} onChange={(event) => { const value = event.target.value; setName(value); setSelectedId(null); setShowSuggestions(Boolean(value.trim())) }} placeholder="Digite ou escolha um item usado anteriormente" autoComplete="off" />
         {showSuggestions && suggestions.length > 0 && <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg">{suggestions.map((product) => <button key={product.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => selectProduct(product)} className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-accent"><span className="font-medium">{product.nome}</span><span className="text-xs text-muted-foreground">{product.comprimento_cm} × {product.largura_cm} cm</span></button>)}</div>}
       </div>
       <div className="space-y-2"><Label htmlFor="product-length">Comprimento (cm)</Label><Input id="product-length" type="number" min="0.01" step="0.01" value={length || ""} onChange={(event) => setLength(Number(event.target.value))} /></div>

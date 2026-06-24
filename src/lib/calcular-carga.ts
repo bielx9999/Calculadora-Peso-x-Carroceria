@@ -2,11 +2,13 @@ import type { LoadItem, LoadPlacement, LoadResult, Product, Vehicle, VehicleAllo
 
 const round = (value: number, digits = 2) => Number(value.toFixed(digits))
 const PRODUCT_GAP_M = 0.02
+type DistributionDirection = "lado_a_lado" | "horizontal"
 
 interface FloorUnit {
   id: string
   product: Product
   quantity: number
+  weightKg: number
   length: number
   width: number
 }
@@ -14,9 +16,13 @@ interface FloorUnit {
 interface PackingBin {
   placements: LoadPlacement[]
   occupiedArea: number
+  occupiedWeight: number
   rowX: number
   usedWidth: number
   rowLength: number
+  laneY: number
+  usedLength: number
+  laneWidth: number
 }
 
 interface PlacementCandidate {
@@ -24,16 +30,21 @@ interface PlacementCandidate {
   width: number
   rotated: boolean
   newRow: boolean
+  score: number
 }
 
-function createFloorUnits(items: LoadItem[]): FloorUnit[] {
+function createFloorUnits(items: LoadItem[], totalWeight: number): FloorUnit[] {
+  const totalQuantity = items.reduce((total, item) => total + item.quantidade, 0)
+  const unitWeight = totalWeight / totalQuantity
   return items.flatMap((item) => {
     const stackLimit = item.produto.empilhavel ? Math.max(item.produto.limite_empilhamento, 1) : 1
     const stackCount = Math.ceil(item.quantidade / stackLimit)
+    const stackQuantity = (index: number) => Math.min(stackLimit, item.quantidade - index * stackLimit)
     return Array.from({ length: stackCount }, (_, index) => ({
       id: `${item.produto.id}-${index + 1}`,
       product: item.produto,
-      quantity: Math.min(stackLimit, item.quantidade - index * stackLimit),
+      quantity: stackQuantity(index),
+      weightKg: stackQuantity(index) * unitWeight,
       length: item.produto.comprimento_cm / 100,
       width: item.produto.largura_cm / 100,
     }))
@@ -44,13 +55,17 @@ function createBin(): PackingBin {
   return {
     placements: [],
     occupiedArea: 0,
+    occupiedWeight: 0,
     rowX: 0,
     usedWidth: 0,
     rowLength: 0,
+    laneY: 0,
+    usedLength: 0,
+    laneWidth: 0,
   }
 }
 
-function findCandidate(unit: FloorUnit, bin: PackingBin, vehicle: Vehicle): PlacementCandidate | null {
+function findSideBySideCandidate(unit: FloorUnit, bin: PackingBin, vehicle: Vehicle): PlacementCandidate | null {
   const orientations = [
     { length: unit.length, width: unit.width, rotated: false },
     { length: unit.width, width: unit.length, rotated: true },
@@ -58,18 +73,92 @@ function findCandidate(unit: FloorUnit, bin: PackingBin, vehicle: Vehicle): Plac
   const currentRow = orientations
     .filter((orientation) => bin.usedWidth + (bin.usedWidth > 0 ? PRODUCT_GAP_M : 0) + orientation.width <= vehicle.largura_m + 0.001
       && bin.rowX + Math.max(bin.rowLength, orientation.length) <= vehicle.comprimento_m + 0.001)
-    .map((orientation) => ({ ...orientation, newRow: false }))
+    .map((orientation) => {
+      const nextUsedWidth = bin.usedWidth + (bin.usedWidth > 0 ? PRODUCT_GAP_M : 0) + orientation.width
+      const nextRowLength = Math.max(bin.rowLength, orientation.length)
+      const widthWaste = vehicle.largura_m - nextUsedWidth
+      const lengthGrowth = nextRowLength - bin.rowLength
+      return { ...orientation, newRow: false, score: widthWaste * 4 + lengthGrowth + Number(orientation.rotated) * 2 }
+    })
+    .sort((a, b) => a.score - b.score)
   if (currentRow.length) return currentRow[0]
 
   const nextRowX = bin.rowX + bin.rowLength + (bin.rowLength > 0 ? PRODUCT_GAP_M : 0)
   const nextRow = orientations
     .filter((orientation) => orientation.width <= vehicle.largura_m + 0.001
       && nextRowX + orientation.length <= vehicle.comprimento_m + 0.001)
-    .map((orientation) => ({ ...orientation, newRow: true }))
+    .map((orientation) => {
+      const widthWaste = vehicle.largura_m - orientation.width
+      const remainingLength = vehicle.comprimento_m - (nextRowX + orientation.length)
+      return { ...orientation, newRow: true, score: 100 + widthWaste * 4 + remainingLength + Number(orientation.rotated) * 2 }
+    })
+    .sort((a, b) => a.score - b.score)
   return nextRow[0] || null
 }
 
-function placeUnit(unit: FloorUnit, bin: PackingBin, candidate: PlacementCandidate) {
+function findHorizontalCandidate(unit: FloorUnit, bin: PackingBin, vehicle: Vehicle): PlacementCandidate | null {
+  const orientations = [
+    { length: unit.length, width: unit.width, rotated: false },
+    { length: unit.width, width: unit.length, rotated: true },
+  ]
+  const currentLane = orientations
+    .filter((orientation) => bin.usedLength + (bin.usedLength > 0 ? PRODUCT_GAP_M : 0) + orientation.length <= vehicle.comprimento_m + 0.001
+      && bin.laneY + Math.max(bin.laneWidth, orientation.width) <= vehicle.largura_m + 0.001)
+    .map((orientation) => {
+      const nextUsedLength = bin.usedLength + (bin.usedLength > 0 ? PRODUCT_GAP_M : 0) + orientation.length
+      const nextLaneWidth = Math.max(bin.laneWidth, orientation.width)
+      const lengthWaste = vehicle.comprimento_m - nextUsedLength
+      const widthGrowth = nextLaneWidth - bin.laneWidth
+      return { ...orientation, newRow: false, score: lengthWaste * 4 + widthGrowth + Number(orientation.rotated) * 2 }
+    })
+    .sort((a, b) => a.score - b.score)
+  if (currentLane.length) return currentLane[0]
+
+  const nextLaneY = bin.laneY + bin.laneWidth + (bin.laneWidth > 0 ? PRODUCT_GAP_M : 0)
+  const nextLane = orientations
+    .filter((orientation) => orientation.length <= vehicle.comprimento_m + 0.001
+      && nextLaneY + orientation.width <= vehicle.largura_m + 0.001)
+    .map((orientation) => {
+      const lengthWaste = vehicle.comprimento_m - orientation.length
+      const remainingWidth = vehicle.largura_m - (nextLaneY + orientation.width)
+      return { ...orientation, newRow: true, score: 100 + lengthWaste * 4 + remainingWidth + Number(orientation.rotated) * 2 }
+    })
+    .sort((a, b) => a.score - b.score)
+  return nextLane[0] || null
+}
+
+function findCandidate(unit: FloorUnit, bin: PackingBin, vehicle: Vehicle, direction: DistributionDirection): PlacementCandidate | null {
+  return direction === "horizontal"
+    ? findHorizontalCandidate(unit, bin, vehicle)
+    : findSideBySideCandidate(unit, bin, vehicle)
+}
+
+function placeUnit(unit: FloorUnit, bin: PackingBin, candidate: PlacementCandidate, direction: DistributionDirection) {
+  if (direction === "horizontal") {
+    if (candidate.newRow) {
+      bin.laneY += bin.laneWidth + (bin.laneWidth > 0 ? PRODUCT_GAP_M : 0)
+      bin.usedLength = 0
+      bin.laneWidth = 0
+    }
+    const positionX = bin.usedLength + (bin.usedLength > 0 ? PRODUCT_GAP_M : 0)
+    bin.placements.push({
+      id: unit.id,
+      produto_id: unit.product.id,
+      nome: unit.product.nome,
+      quantidade: unit.quantity,
+      x_m: round(positionX, 3),
+      y_m: round(bin.laneY, 3),
+      comprimento_m: round(candidate.length, 3),
+      largura_m: round(candidate.width, 3),
+      rotacionado: candidate.rotated,
+    })
+    bin.occupiedArea += candidate.length * candidate.width
+    bin.occupiedWeight += unit.weightKg
+    bin.usedLength = positionX + candidate.length
+    bin.laneWidth = Math.max(bin.laneWidth, candidate.width)
+    return
+  }
+
   if (candidate.newRow) {
     bin.rowX += bin.rowLength + (bin.rowLength > 0 ? PRODUCT_GAP_M : 0)
     bin.usedWidth = 0
@@ -88,39 +177,40 @@ function placeUnit(unit: FloorUnit, bin: PackingBin, candidate: PlacementCandida
     rotacionado: candidate.rotated,
   })
   bin.occupiedArea += candidate.length * candidate.width
+  bin.occupiedWeight += unit.weightKg
   bin.usedWidth = positionY + candidate.width
   bin.rowLength = Math.max(bin.rowLength, candidate.length)
 }
 
-function packUnitsInFixedBins(units: FloorUnit[], vehicle: Vehicle, count: number): PackingBin[] | null {
-  if (units.some((unit) => !findCandidate(unit, createBin(), vehicle))) return null
+function packUnitsInFixedBins(units: FloorUnit[], vehicle: Vehicle, count: number, direction: DistributionDirection): PackingBin[] | null {
+  if (units.some((unit) => unit.weightKg > vehicle.capacidade_kg + 0.001 || !findCandidate(unit, createBin(), vehicle, direction))) return null
   const bins = Array.from({ length: count }, () => createBin())
 
   for (const unit of units) {
     const options = bins.flatMap((bin, index) => {
-      const candidate = findCandidate(unit, bin, vehicle)
-      return candidate ? [{ bin, index, candidate }] : []
-    }).sort((a, b) => Number(a.candidate.newRow) - Number(b.candidate.newRow)
+      const candidate = findCandidate(unit, bin, vehicle, direction)
+      return candidate && bin.occupiedWeight + unit.weightKg <= vehicle.capacidade_kg + 0.001 ? [{ bin, index, candidate }] : []
+    }).sort((a, b) => a.candidate.score - b.candidate.score
       || b.bin.occupiedArea - a.bin.occupiedArea
       || a.index - b.index)
     if (!options.length) return null
-    placeUnit(unit, options[0].bin, options[0].candidate)
+    placeUnit(unit, options[0].bin, options[0].candidate, direction)
   }
   return bins
 }
 
-function packUnits(units: FloorUnit[], vehicle: Vehicle, minimumBins: number): PackingBin[] | null {
+function packUnits(units: FloorUnit[], vehicle: Vehicle, minimumBins: number, direction: DistributionDirection): PackingBin[] | null {
   const maximumBins = Math.max(minimumBins, units.length)
   for (let count = minimumBins; count <= maximumBins; count += 1) {
-    const bins = packUnitsInFixedBins(units, vehicle, count)
+    const bins = packUnitsInFixedBins(units, vehicle, count, direction)
     if (bins) return bins
   }
   return null
 }
 
-function buildVehiclePlan(units: FloorUnit[], vehicle: Vehicle, totalWeight: number, totalArea: number) {
+function buildVehiclePlan(units: FloorUnit[], vehicle: Vehicle, totalWeight: number, totalArea: number, direction: DistributionDirection) {
   const minimumByWeight = Math.ceil(totalWeight / vehicle.capacidade_kg)
-  const bins = packUnits(units, vehicle, minimumByWeight)
+  const bins = packUnits(units, vehicle, minimumByWeight, direction)
   if (!bins) {
     const alternative: VehicleAlternative = {
       veiculo: vehicle,
@@ -165,26 +255,49 @@ function* vehicleCombinations(vehicles: Vehicle[], count: number, start = 0, cur
   }
 }
 
-function packMixedFleet(units: FloorUnit[], fleet: Vehicle[]): FleetBin[] | null {
+function packMixedFleet(units: FloorUnit[], fleet: Vehicle[], direction: DistributionDirection): FleetBin[] | null {
   const bins: FleetBin[] = [...fleet]
-    .sort((a, b) => b.capacidade_kg - a.capacidade_kg || b.area_m2 - a.area_m2)
+    .sort((a, b) => a.area_m2 - b.area_m2 || a.capacidade_kg - b.capacidade_kg)
     .map((vehicle) => ({ ...createBin(), vehicle }))
 
   for (const unit of units) {
-    let placed = false
-    for (const bin of bins) {
-      const candidate = findCandidate(unit, bin, bin.vehicle)
-      if (!candidate) continue
-      placeUnit(unit, bin, candidate)
-      placed = true
-      break
-    }
-    if (!placed) return null
+    const options = bins.flatMap((bin, index) => {
+      const candidate = findCandidate(unit, bin, bin.vehicle, direction)
+      if (!candidate) return []
+      if (bin.occupiedWeight + unit.weightKg > bin.vehicle.capacidade_kg + 0.001) return []
+      const vehicleWaste = (bin.vehicle.area_m2 - unit.length * unit.width) / Math.max(bin.vehicle.area_m2, 1)
+      const unusedBinPenalty = bin.placements.length ? 0 : 0.2
+      return [{ bin, index, candidate, score: candidate.score + vehicleWaste + unusedBinPenalty }]
+    }).sort((a, b) => a.score - b.score
+      || a.bin.vehicle.area_m2 - b.bin.vehicle.area_m2
+      || a.index - b.index)
+    if (!options.length) return null
+    placeUnit(unit, options[0].bin, options[0].candidate, direction)
   }
   return bins
 }
 
-function findMixedPlan(units: FloorUnit[], activeVehicles: Vehicle[], totalWeight: number, totalArea: number, maximumCount: number) {
+function calculatePlanScore(bins: FleetBin[], totalWeight: number, totalArea: number, largestCapacity: number, largestArea: number) {
+  const totalCapacity = bins.reduce((sum, bin) => sum + bin.vehicle.capacidade_kg, 0)
+  const totalFloorArea = bins.reduce((sum, bin) => sum + bin.vehicle.area_m2, 0)
+  const emptyBins = bins.filter((bin) => !bin.placements.length).length
+  const occupiedBins = bins.filter((bin) => bin.placements.length)
+  const distinctVehicles = new Set(bins.map((bin) => bin.vehicle.id)).size
+  const averageAreaOccupancy = occupiedBins.length
+    ? occupiedBins.reduce((sum, bin) => sum + bin.occupiedArea / bin.vehicle.area_m2, 0) / occupiedBins.length
+    : 0
+  const capacityWaste = (totalCapacity - totalWeight) / largestCapacity
+  const areaWaste = (totalFloorArea - totalArea) / largestArea
+  const vehicleCost = bins.reduce((sum, bin) => sum + (bin.vehicle.capacidade_kg / largestCapacity) + (bin.vehicle.area_m2 / largestArea), 0)
+  return emptyBins * 1000
+    + (distinctVehicles - 1) * 2.5
+    + capacityWaste * 10
+    + areaWaste * 4
+    + vehicleCost
+    - averageAreaOccupancy
+}
+
+function findMixedPlan(units: FloorUnit[], activeVehicles: Vehicle[], totalWeight: number, totalArea: number, maximumCount: number, direction: DistributionDirection) {
   const vehicleOptions = activeVehicles
     .sort((a, b) => b.capacidade_kg - a.capacidade_kg || b.area_m2 - a.area_m2)
   const largestCapacity = Math.max(...vehicleOptions.map((vehicle) => vehicle.capacidade_kg))
@@ -197,10 +310,9 @@ function findMixedPlan(units: FloorUnit[], activeVehicles: Vehicle[], totalWeigh
       const totalCapacity = combination.reduce((sum, vehicle) => sum + vehicle.capacidade_kg, 0)
       const totalFloorArea = combination.reduce((sum, vehicle) => sum + vehicle.area_m2, 0)
       if (totalCapacity < totalWeight || totalFloorArea < totalArea) continue
-      const bins = packMixedFleet(units, combination)
+      const bins = packMixedFleet(units, combination, direction)
       if (!bins) continue
-      if (count > 12) return bins
-      const score = totalCapacity / largestCapacity + totalFloorArea / largestArea
+      const score = calculatePlanScore(bins, totalWeight, totalArea, largestCapacity, largestArea)
       if (!best || score < best.score) best = { bins, score }
     }
     if (best) return best.bins
@@ -208,15 +320,16 @@ function findMixedPlan(units: FloorUnit[], activeVehicles: Vehicle[], totalWeigh
   return null
 }
 
-export function calcularCarga(items: LoadItem[], vehicles: Vehicle[], totalWeight: number): LoadResult {
+export function calcularCarga(items: LoadItem[], vehicles: Vehicle[], totalWeight: number, direction: DistributionDirection = "lado_a_lado"): LoadResult {
   if (!items.length) throw new Error("Adicione ao menos um item para calcular a carga.")
   if (!Number.isFinite(totalWeight) || totalWeight <= 0) throw new Error("Informe o peso total da carga.")
+  if (items.reduce((total, item) => total + item.quantidade, 0) <= 0) throw new Error("Informe a quantidade dos itens da carga.")
 
   const validVehicles = vehicles.filter((vehicle) => vehicle.capacidade_kg > 0 && vehicle.area_m2 > 0)
   const totalArea = items.reduce((total, item) => total + item.area_total_m2, 0)
-  const units = createFloorUnits(items)
+  const units = createFloorUnits(items, totalWeight)
   const plans = validVehicles
-    .map((vehicle) => buildVehiclePlan(units, vehicle, totalWeight, totalArea))
+    .map((vehicle) => buildVehiclePlan(units, vehicle, totalWeight, totalArea, direction))
     .sort((a, b) => a.alternative.veiculo.area_m2 - b.alternative.veiculo.area_m2)
 
   const available = plans
@@ -229,7 +342,7 @@ export function calcularCarga(items: LoadItem[], vehicles: Vehicle[], totalWeigh
   const largestCapacity = Math.max(...activeVehicles.map((vehicle) => vehicle.capacidade_kg))
   const mixedUpperBound = suggested?.alternative.quantidade
     ?? units.length + Math.ceil(totalWeight / largestCapacity)
-  const mixedBins = findMixedPlan(units, activeVehicles, totalWeight, totalArea, mixedUpperBound)
+  const mixedBins = findMixedPlan(units, activeVehicles, totalWeight, totalArea, mixedUpperBound, direction)
   if (!mixedBins && !suggested) throw new Error("Nenhuma combinação de carrocerias ativas comporta as dimensões dos itens.")
   const selectedBins: FleetBin[] = mixedBins || suggested.bins.map((bin) => ({ ...bin, vehicle: suggested.alternative.veiculo }))
   const fleetCapacity = selectedBins.reduce((sum, bin) => sum + bin.vehicle.capacidade_kg, 0)
@@ -237,13 +350,12 @@ export function calcularCarga(items: LoadItem[], vehicles: Vehicle[], totalWeigh
   const weightOccupancy = (totalWeight / fleetCapacity) * 100
   const areaOccupancy = (totalArea / fleetArea) * 100
   const distribution: VehicleAllocation[] = selectedBins.map((bin, index) => {
-    const allocatedWeight = totalWeight * (bin.vehicle.capacidade_kg / fleetCapacity)
     return {
     indice: index + 1,
     veiculo: bin.vehicle,
-    peso_kg: round(allocatedWeight),
+    peso_kg: round(bin.occupiedWeight),
     area_m2: round(bin.occupiedArea, 3),
-    ocupacao_peso: round((allocatedWeight / bin.vehicle.capacidade_kg) * 100),
+    ocupacao_peso: round((bin.occupiedWeight / bin.vehicle.capacidade_kg) * 100),
     ocupacao_area: round((bin.occupiedArea / bin.vehicle.area_m2) * 100),
     posicoes: bin.placements,
   }})

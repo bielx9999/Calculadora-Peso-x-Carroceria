@@ -105,7 +105,7 @@ export function VehiclesManager({ initialVehicles }: { initialVehicles: Vehicle[
           <Table>
             <TableHeader><TableRow><TableHead>Veículo</TableHead><TableHead>Carroceria</TableHead><TableHead>Capacidade</TableHead><TableHead>Área útil</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
             <TableBody>{filtered.map((vehicle) => <TableRow key={vehicle.id}>
-              <TableCell><div className="flex items-center gap-3"><span className="rounded-lg bg-blue-500/10 p-2 text-blue-600"><Truck className="h-4 w-4" /></span><p className="font-medium">{vehicle.nome}</p></div></TableCell>
+              <TableCell><div className="flex items-center gap-3"><span className="rounded-lg bg-[#FFCC29]/20 p-2 text-[#987600] dark:text-[#FFCC29]"><Truck className="h-4 w-4" /></span><p className="font-medium">{vehicle.nome}</p></div></TableCell>
               <TableCell>{typeLabels[vehicle.tipo]}</TableCell>
               <TableCell className="metric-grid">{number.format(vehicle.capacidade_kg)} kg</TableCell>
               <TableCell className="metric-grid">{number.format(vehicle.area_m2)} m²</TableCell>

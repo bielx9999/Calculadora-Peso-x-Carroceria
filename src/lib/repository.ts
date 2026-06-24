@@ -218,3 +218,18 @@ export async function createSimulation(input: Omit<Simulation, "id" | "criado_em
     return simulation
   })
 }
+
+export async function deleteSimulation(id: string): Promise<boolean> {
+  const supabase = getSupabaseServerClient()
+  if (supabase) {
+    const { error } = await supabase.from("simulacoes").delete().eq("id", id)
+    if (error) throw error
+    return true
+  }
+  return updateLocalDatabase((database) => {
+    const index = database.simulations.findIndex((item) => item.id === id)
+    if (index < 0) return false
+    database.simulations.splice(index, 1)
+    return true
+  })
+}

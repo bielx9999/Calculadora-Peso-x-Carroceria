@@ -27,6 +27,7 @@ export const productSchema = z.object({
 export const calculationSchema = z.object({
   itens: z.array(z.object({ produto_id: z.string(), quantidade: z.number().int().positive() })).min(1),
   peso_total_kg: positive,
+  direcao_distribuicao: z.enum(["lado_a_lado", "horizontal"]).default("lado_a_lado"),
 })
 
 export type VehicleInput = z.infer<typeof vehicleSchema>
