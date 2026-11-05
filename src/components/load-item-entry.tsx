@@ -21,6 +21,7 @@ export function LoadItemEntry({ products, onAdd, initialItem }: LoadItemEntryPro
   const [name, setName] = useState(initialProduct?.nome || "")
   const [length, setLength] = useState(initialProduct?.comprimento_cm || 0)
   const [width, setWidth] = useState(initialProduct?.largura_cm || 0)
+  const [height, setHeight] = useState(initialProduct?.altura_cm?.toString() ?? "")
   const [quantity, setQuantity] = useState(initialItem?.quantidade || 1)
   const [stackable, setStackable] = useState(initialProduct?.empilhavel || false)
   const [stackLimit, setStackLimit] = useState(initialProduct?.empilhavel ? initialProduct.limite_empilhamento : 2)
@@ -40,6 +41,7 @@ export function LoadItemEntry({ products, onAdd, initialItem }: LoadItemEntryPro
     setName(product.nome)
     setLength(product.comprimento_cm)
     setWidth(product.largura_cm)
+    setHeight(product.altura_cm?.toString() ?? "")
     setStackable(product.empilhavel)
     setStackLimit(product.empilhavel ? Math.max(product.limite_empilhamento, 2) : 2)
     setSelectedId(product.id)
@@ -49,6 +51,7 @@ export function LoadItemEntry({ products, onAdd, initialItem }: LoadItemEntryPro
   async function addItem() {
     if (!name.trim()) return toast.error("Informe o nome do produto.")
     if (length <= 0 || width <= 0) return toast.error("Informe comprimento e largura válidos.")
+    if (height !== "" && (!Number.isFinite(Number(height)) || Number(height) <= 0)) return toast.error("Informe uma altura válida.")
     if (!Number.isInteger(quantity) || quantity <= 0) return toast.error("Informe uma quantidade válida.")
     if (stackable && (!Number.isInteger(stackLimit) || stackLimit < 2)) return toast.error("Informe um limite de empilhamento de pelo menos 2 unidades.")
 
@@ -61,6 +64,7 @@ export function LoadItemEntry({ products, onAdd, initialItem }: LoadItemEntryPro
       sku: existing?.sku || null,
       comprimento_cm: length,
       largura_cm: width,
+      altura_cm: height === "" ? null : Number(height),
       empilhavel: stackable,
       limite_empilhamento: stackable ? stackLimit : 1,
       fragil: existing?.fragil || false,
@@ -84,6 +88,7 @@ export function LoadItemEntry({ products, onAdd, initialItem }: LoadItemEntryPro
     setName("")
     setLength(0)
     setWidth(0)
+    setHeight("")
     setQuantity(1)
     setStackable(false)
     setStackLimit(2)
@@ -91,14 +96,15 @@ export function LoadItemEntry({ products, onAdd, initialItem }: LoadItemEntryPro
   }
 
   return <div className="space-y-4">
-    <div className="grid gap-3 lg:grid-cols-[1.4fr_150px_150px_110px_auto] lg:items-end">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))_90px_auto] lg:items-end">
       <div className="relative space-y-2">
         <Label htmlFor="product-name">Nome do produto</Label>
         <Input id="product-name" value={name} onFocus={() => setShowSuggestions(Boolean(name.trim()))} onBlur={() => setShowSuggestions(false)} onChange={(event) => { const value = event.target.value; setName(value); setSelectedId(null); setShowSuggestions(Boolean(value.trim())) }} placeholder="Digite ou escolha um item usado anteriormente" autoComplete="off" />
-        {showSuggestions && suggestions.length > 0 && <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg">{suggestions.map((product) => <button key={product.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => selectProduct(product)} className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-accent"><span className="font-medium">{product.nome}</span><span className="text-xs text-muted-foreground">{product.comprimento_cm} × {product.largura_cm} cm</span></button>)}</div>}
+        {showSuggestions && suggestions.length > 0 && <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg">{suggestions.map((product) => <button key={product.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => selectProduct(product)} className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-accent"><span className="font-medium">{product.nome}</span><span className="text-xs text-muted-foreground">{product.comprimento_cm} × {product.largura_cm}{product.altura_cm ? ` × ${product.altura_cm}` : ""} cm</span></button>)}</div>}
       </div>
       <div className="space-y-2"><Label htmlFor="product-length">Comprimento (cm)</Label><Input id="product-length" type="number" min="0.01" step="0.01" value={length || ""} onChange={(event) => setLength(Number(event.target.value))} /></div>
       <div className="space-y-2"><Label htmlFor="product-width">Largura (cm)</Label><Input id="product-width" type="number" min="0.01" step="0.01" value={width || ""} onChange={(event) => setWidth(Number(event.target.value))} /></div>
+      <div className="space-y-2"><Label htmlFor="product-height">Altura (cm)</Label><Input id="product-height" type="number" min="0.01" step="0.01" value={height} onChange={(event) => setHeight(event.target.value)} /></div>
       <div className="space-y-2"><Label htmlFor="product-quantity">Quantidade</Label><Input id="product-quantity" type="number" min="1" step="1" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></div>
       <Button type="button" onClick={addItem} disabled={saving}><PackagePlus className="h-4 w-4" />{saving ? "Salvando..." : initialItem ? "Atualizar produto" : "Adicionar"}</Button>
     </div>

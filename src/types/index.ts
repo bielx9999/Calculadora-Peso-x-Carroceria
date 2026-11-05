@@ -21,6 +21,7 @@ export interface Product {
   sku: string | null
   comprimento_cm: number
   largura_cm: number
+  altura_cm?: number | null
   area_unitaria_m2: number
   empilhavel: boolean
   limite_empilhamento: number
@@ -45,6 +46,7 @@ export interface LoadPlacement {
   y_m: number
   comprimento_m: number
   largura_m: number
+  altura_unitaria_m?: number
   rotacionado: boolean
 }
 

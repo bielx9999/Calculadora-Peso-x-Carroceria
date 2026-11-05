@@ -5,5 +5,5 @@ import { listSimulations } from "@/lib/repository"
 export const dynamic = "force-dynamic"
 
 export default async function SimulationsPage() {
-  return <div className="space-y-6"><PageHeader eyebrow="Historico" title="Simulacoes de carga" description="Consulte, duplique e acompanhe seus planejamentos." /><SimulationsList initialSimulations={await listSimulations()} /></div>
+  return <div className="space-y-6"><PageHeader title="Simulacoes de carga" /><SimulationsList initialSimulations={await listSimulations()} /></div>
 }

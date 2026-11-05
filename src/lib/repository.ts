@@ -29,7 +29,7 @@ async function readLocalDatabase(): Promise<LocalDatabase> {
   try {
     const stored = JSON.parse(await readFile(dataFile, "utf8")) as LocalDatabase
     const hasLegacyFields = stored.vehicles.some((vehicle) => "placa" in vehicle || "altura_m" in vehicle || "volume_m3" in vehicle)
-      || stored.products.some((product) => "peso_unitario_kg" in product || "altura_cm" in product || "volume_unitario_m3" in product)
+      || stored.products.some((product) => "peso_unitario_kg" in product || "volume_unitario_m3" in product)
     const normalized = {
       vehicles: stored.vehicles.map((vehicle) => {
         const current = { ...vehicle } as Vehicle & { placa?: string | null; altura_m?: number; volume_m3?: number }
@@ -40,10 +40,9 @@ async function readLocalDatabase(): Promise<LocalDatabase> {
         return current
       }),
       products: stored.products.map((product) => {
-        const current = { ...product } as Product & { peso_unitario_kg?: number; altura_cm?: number; volume_unitario_m3?: number }
+        const current = { ...product } as Product & { peso_unitario_kg?: number; volume_unitario_m3?: number }
         current.area_unitaria_m2 = (current.comprimento_cm / 100) * (current.largura_cm / 100)
         delete current.peso_unitario_kg
-        delete current.altura_cm
         delete current.volume_unitario_m3
         return current
       }),

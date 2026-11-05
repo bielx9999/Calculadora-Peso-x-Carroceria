@@ -134,6 +134,14 @@ function findCandidate(unit: FloorUnit, bin: PackingBin, vehicle: Vehicle, direc
 }
 
 function placeUnit(unit: FloorUnit, bin: PackingBin, candidate: PlacementCandidate, direction: DistributionDirection) {
+  const unitHeight = unit.product.altura_cm
+  const dimensions = {
+    comprimento_m: round(candidate.length, 3),
+    largura_m: round(candidate.width, 3),
+    ...(unitHeight && unitHeight > 0 ? { altura_unitaria_m: unitHeight / 100 } : {}),
+    rotacionado: candidate.rotated,
+  }
+
   if (direction === "horizontal") {
     if (candidate.newRow) {
       bin.laneY += bin.laneWidth + (bin.laneWidth > 0 ? PRODUCT_GAP_M : 0)
@@ -148,9 +156,7 @@ function placeUnit(unit: FloorUnit, bin: PackingBin, candidate: PlacementCandida
       quantidade: unit.quantity,
       x_m: round(positionX, 3),
       y_m: round(bin.laneY, 3),
-      comprimento_m: round(candidate.length, 3),
-      largura_m: round(candidate.width, 3),
-      rotacionado: candidate.rotated,
+      ...dimensions,
     })
     bin.occupiedArea += candidate.length * candidate.width
     bin.occupiedWeight += unit.weightKg
@@ -172,9 +178,7 @@ function placeUnit(unit: FloorUnit, bin: PackingBin, candidate: PlacementCandida
     quantidade: unit.quantity,
     x_m: round(bin.rowX, 3),
     y_m: round(positionY, 3),
-    comprimento_m: round(candidate.length, 3),
-    largura_m: round(candidate.width, 3),
-    rotacionado: candidate.rotated,
+    ...dimensions,
   })
   bin.occupiedArea += candidate.length * candidate.width
   bin.occupiedWeight += unit.weightKg

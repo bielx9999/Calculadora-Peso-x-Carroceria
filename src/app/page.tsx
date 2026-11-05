@@ -1,27 +1,39 @@
+import Image from "next/image"
 import Link from "next/link"
-import { ArrowRight, Calculator, History, Route, Truck } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { listProducts, listSimulations, listVehicles } from "@/lib/repository"
+import { applicationTabs } from "@/lib/application-tabs"
 
-const number = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 })
-export const dynamic = "force-dynamic"
+export default function HomePage() {
+  return (
+    <main className="relative isolate flex min-h-dvh flex-col items-center overflow-hidden border-t-[10px] border-[#FFCC29] bg-[linear-gradient(110deg,#393939,#222222)] px-5 pb-16 pt-14 text-white sm:px-10 sm:pt-20">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle,#111111_2px,transparent_3px)] bg-[length:36px_36px] opacity-40" />
+      <svg aria-hidden="true" viewBox="0 0 1440 460" preserveAspectRatio="none" className="pointer-events-none absolute inset-x-0 bottom-[8%] -z-10 h-[60%] w-full text-white/10">
+        {Array.from({ length: 22 }, (_, index) => (
+          <path
+            key={index}
+            d={`M0 ${285 + index * 4} C380 ${515 - index * 3} 490 ${140 + index * 5} 815 ${190 + index * 4} S1220 ${410 + index} 1440 ${55 + index * 14}`}
+            fill="none"
+            stroke="currentColor"
+          />
+        ))}
+      </svg>
 
-export default async function DashboardPage() {
-  const [vehicles, products, simulations] = await Promise.all([listVehicles(), listProducts(), listSimulations()])
-  const activeVehicles = vehicles.filter((item) => item.ativo)
-  const metrics = [
-    { label: "Veiculos ativos", value: activeVehicles.length, detail: `${vehicles.length} cadastrados`, icon: Truck, color: "text-blue-600 bg-blue-500/10" },
-    { label: "Itens no historico", value: products.filter((item) => item.ativo).length, detail: "reutilizaveis na calculadora", icon: History, color: "text-violet-600 bg-violet-500/10" },
-    { label: "Simulacoes", value: simulations.length, detail: "planejamentos salvos", icon: Route, color: "text-emerald-600 bg-emerald-500/10" },
-  ]
-  return <div className="space-y-7">
-    <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><Badge variant="outline" className="mb-3">Visao geral</Badge><h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Bom dia, equipe de logistica.</h1><p className="mt-1 text-muted-foreground">Sua operacao esta pronta para o proximo embarque.</p></div><Button asChild className="bg-[#FFCC29] text-slate-900 hover:bg-[#E6B800]"><Link href="/calculadora"><Calculator className="h-4 w-4" />Nova simulacao</Link></Button></section>
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{metrics.map((metric) => <Card key={metric.label}><CardContent className="flex items-start justify-between p-5"><div><p className="text-sm text-muted-foreground">{metric.label}</p><p className="metric-grid mt-2 text-2xl font-semibold">{metric.value}</p><p className="mt-1 text-xs text-muted-foreground">{metric.detail}</p></div><span className={`rounded-lg p-2.5 ${metric.color}`}><metric.icon className="h-5 w-5" /></span></CardContent></Card>)}</section>
-    <section className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
-      <Card><CardHeader className="flex-row items-center justify-between"><div><CardTitle>Simulacoes recentes</CardTitle><CardDescription>Acompanhe os ultimos planejamentos.</CardDescription></div><Button asChild variant="ghost" size="sm"><Link href="/simulacoes">Ver todas <ArrowRight className="h-4 w-4" /></Link></Button></CardHeader><CardContent>{simulations.length ? <div className="divide-y">{simulations.slice(0, 4).map((item) => <div key={item.id} className="flex items-center justify-between py-4"><div><p className="font-medium">{item.nome}</p><p className="text-xs text-muted-foreground">{number.format(item.peso_total_kg)} kg · {item.numero_veiculos} veiculo(s)</p></div><Badge>{item.status}</Badge></div>)}</div> : <div className="flex min-h-52 flex-col items-center justify-center rounded-xl border border-dashed text-center"><Calculator className="mb-3 h-8 w-8 text-muted-foreground" /><p className="font-medium">Nenhuma simulacao salva</p><p className="mt-1 max-w-xs text-sm text-muted-foreground">Calcule sua primeira carga para acompanhar o historico aqui.</p><Button asChild variant="link"><Link href="/calculadora">Comecar agora</Link></Button></div>}</CardContent></Card>
-      <Card className="overflow-hidden bg-[#1e3a5f] text-white"><CardHeader><CardTitle>Planejamento rapido</CardTitle><CardDescription className="text-white/65">Transforme itens em um plano de transporte em tres passos.</CardDescription></CardHeader><CardContent className="space-y-5">{["Informe os itens e quantidades", "Compare peso e area automaticamente", "Salve e compartilhe a simulacao"].map((label, index) => <div key={label} className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold">{index + 1}</span><p className="text-sm text-white/85">{label}</p></div>)}<Button asChild className="mt-3 w-full bg-white text-[#1e3a5f] hover:bg-white/90"><Link href="/calculadora">Abrir calculadora <ArrowRight className="h-4 w-4" /></Link></Button></CardContent></Card>
-    </section>
-  </div>
+      <Image src="/avapex-logo.png" alt="Avapex Transportes" width={540} height={166} unoptimized className="mb-5 h-auto w-48 sm:w-64" />
+      <h1 className="text-center text-3xl font-extrabold uppercase tracking-tight sm:text-5xl">
+        Calculadora de Carga
+      </h1>
+
+      <nav aria-label="Abas da calculadora" className="my-auto grid w-full max-w-3xl grid-cols-2 gap-3 py-16 sm:grid-cols-4 sm:gap-5">
+        {applicationTabs.map(({ href, icon: Icon, label }) => (
+          <Link
+            key={href}
+            href={href}
+            className="flex min-h-36 flex-col items-center rounded-xl px-3 py-5 text-center text-[#FFCC29] transition-colors hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FFCC29]"
+          >
+            <Icon aria-hidden="true" className="mb-4 size-11" strokeWidth={1.35} />
+            <span className="w-full border-t border-current pt-3 text-base font-semibold sm:text-lg">{label}</span>
+          </Link>
+        ))}
+      </nav>
+    </main>
+  )
 }

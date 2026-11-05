@@ -5,5 +5,5 @@ import { listVehicles } from "@/lib/repository"
 export const dynamic = "force-dynamic"
 
 export default async function VehiclesPage() {
-  return <div className="space-y-6"><PageHeader eyebrow="Frota" title="Veiculos e carrocerias" description="Gerencie a capacidade disponivel para cada operacao." /><VehiclesManager initialVehicles={await listVehicles()} /></div>
+  return <div className="space-y-6"><PageHeader title="Implementos" /><VehiclesManager initialVehicles={await listVehicles()} /></div>
 }

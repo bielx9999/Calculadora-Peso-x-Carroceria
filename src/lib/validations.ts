@@ -17,6 +17,7 @@ export const productSchema = z.object({
   sku: z.string().trim().nullable().optional(),
   comprimento_cm: positive,
   largura_cm: positive,
+  altura_cm: positive.nullish(),
   empilhavel: z.boolean().default(false),
   limite_empilhamento: z.coerce.number().int().min(1).default(1),
   fragil: z.boolean().default(false),

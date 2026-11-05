@@ -119,7 +119,7 @@ export function VehiclesManager({ initialVehicles }: { initialVehicles: Vehicle[
 
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader><DialogTitle>{editing ? "Editar veículo" : "Cadastrar veículo"}</DialogTitle><DialogDescription>Informe a capacidade e as dimensões da área útil de piso.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{editing ? "Editar veículo" : "Cadastrar veículo"}</DialogTitle><DialogDescription className="sr-only">Informe a capacidade e as dimensões da área útil de piso.</DialogDescription></DialogHeader>
         <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Nome" error={form.formState.errors.nome?.message}><Input {...form.register("nome")} placeholder="Ex.: Van Furgão" /></Field>
